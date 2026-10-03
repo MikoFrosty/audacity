@@ -322,7 +322,10 @@ void TrackItemsMoveController::update()
             end = clip.endTime;
         }
     }
-    const double offset = pointerTimeOffset(start, end);
+    // Holding Ctrl (Cmd on macOS) while dragging locks items to their original time,
+    // so they can be moved to another track without shifting left or right
+    const bool timeLocked = !m_rangeSelection && application()->keyboardModifiers().testFlag(Qt::ControlModifier);
+    const double offset = timeLocked ? 0.0 : pointerTimeOffset(start, end);
     const int trackOffset = pointerTrackOffset();
     if (!m_moved && std::abs(offset * m_context->zoom()) < 3.0 && trackOffset == 0) {
         return;

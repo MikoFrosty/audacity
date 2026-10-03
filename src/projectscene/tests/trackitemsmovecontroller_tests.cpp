@@ -18,6 +18,7 @@
 #include "trackedit/tests/mocks/selectioncontrollermock.h"
 #include "trackedit/tests/mocks/projecthistorymock.h"
 #include "context/tests/mocks/globalcontextmock.h"
+#include "global/tests/mocks/applicationmock.h"
 #include "project/tests/mocks/audacityprojectmock.h"
 #include "playback/tests/mocks/playbackmock.h"
 #include "mocks/audiooutputmock.h"
@@ -73,6 +74,7 @@ class TrackItemsMoveControllerTests : public Test
 protected:
     void SetUp() override
     {
+        m_application = std::make_shared<NiceMock<muse::ApplicationMock> >();
         m_globalContext = std::make_shared<NiceMock<context::GlobalContextMock> >();
         m_project = std::make_shared<NiceMock<project::AudacityProjectMock> >();
         m_trackeditProject = std::make_shared<NiceMock<trackedit::TrackeditProjectMock> >();
@@ -86,6 +88,7 @@ protected:
         m_navigation = std::make_shared<NiceMock<trackedit::TrackNavigationControllerMock> >();
         m_requests = std::make_shared<trackedit::TracksViewRequestsService>(muse::modularity::globalCtx());
 
+        ON_CALL(*m_application, keyboardModifiers()).WillByDefault([this] { return m_modifiers; });
         ON_CALL(*m_navigation, focus()).WillByDefault([this] { return m_focus; });
         ON_CALL(*m_history, historyChanged()).WillByDefault(Return(m_historyChanged));
 
@@ -126,6 +129,7 @@ protected:
         m_context = std::make_unique<TimelineContext>();
         SnapTestAccess::wireContext(m_context.get(), m_globalContext, m_playback);
         m_controller = std::make_unique<TrackItemsMoveController>();
+        m_controller->application.set(m_application);
         m_controller->globalContext.set(m_globalContext);
         m_controller->selectionController.set(m_selection);
         m_controller->trackeditInteraction.set(m_interaction);
@@ -203,10 +207,12 @@ protected:
     trackedit::LabelKeyList m_selectedLabels;
     trackedit::ClipKeyList m_selectedClips;
     trackedit::TrackFocus m_focus;
+    Qt::KeyboardModifiers m_modifiers;
     muse::async::Channel<trackedit::HistoryEvent> m_historyChanged;
     muse::async::Channel<trackedit::Track> m_trackRemoved;
     std::shared_ptr<NiceMock<trackedit::TrackNavigationControllerMock> > m_navigation;
     std::shared_ptr<trackedit::TracksViewRequestsService> m_requests;
+    std::shared_ptr<NiceMock<muse::ApplicationMock> > m_application;
     std::shared_ptr<NiceMock<context::GlobalContextMock> > m_globalContext;
     std::shared_ptr<NiceMock<project::AudacityProjectMock> > m_project;
     std::shared_ptr<NiceMock<trackedit::TrackeditProjectMock> > m_trackeditProject;
@@ -293,6 +299,31 @@ TEST_F(TrackItemsMoveControllerTests, ClipsMoveOnlyOnceOnDrop)
 
     const trackedit::ClipKeyList moved { { 2, 20 } };
     EXPECT_CALL(*m_interaction, moveClips(m_selectedClips, trackedit::secs_t(15.0), 1))
+    .WillOnce(Return(muse::RetVal<trackedit::ClipKeyList>::make_ok(moved)));
+    m_controller->finish();
+    expectFinished();
+}
+
+TEST_F(TrackItemsMoveControllerTests, CtrlDragKeepsClipsAtOriginalTime)
+{
+    selectClip();
+    m_controller->start(TrackItemKey(m_clip.key));
+    m_modifiers = Qt::ControlModifier;
+    movePointer(20.0, 150.0);
+    m_controller->update();
+    EXPECT_DOUBLE_EQ(m_controller->timeOffset(), 0.0);
+
+    // Releasing Ctrl mid-drag lets the clip follow the pointer again
+    m_modifiers = Qt::NoModifier;
+    movePointer(25.0, 150.0);
+    m_controller->update();
+    EXPECT_DOUBLE_EQ(m_controller->timeOffset(), 15.0);
+
+    m_modifiers = Qt::ControlModifier;
+    m_controller->update();
+
+    const trackedit::ClipKeyList moved { { 2, 20 } };
+    EXPECT_CALL(*m_interaction, moveClips(m_selectedClips, trackedit::secs_t(0.0), 1))
     .WillOnce(Return(muse::RetVal<trackedit::ClipKeyList>::make_ok(moved)));
     m_controller->finish();
     expectFinished();

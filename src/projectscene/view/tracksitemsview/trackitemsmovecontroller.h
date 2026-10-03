@@ -7,6 +7,7 @@
 #include <QPointer>
 
 #include "async/asyncable.h"
+#include "global/iapplication.h"
 #include "context/iglobalcontext.h"
 #include "trackedit/iprojecthistory.h"
 #include "trackedit/iselectioncontroller.h"
@@ -25,6 +26,7 @@ class TrackItemsMoveController : public QObject, public muse::async::Asyncable, 
     Q_PROPERTY(bool active READ active NOTIFY activeChanged FINAL)
     Q_PROPERTY(bool keyboardActive READ keyboardActive NOTIFY activeChanged FINAL)
 
+    muse::GlobalInject<muse::IApplication> application;
     muse::ContextInject<context::IGlobalContext> globalContext{ this };
     muse::ContextInject<trackedit::ISelectionController> selectionController{ this };
     muse::ContextInject<trackedit::ITrackeditInteraction> trackeditInteraction{ this };
